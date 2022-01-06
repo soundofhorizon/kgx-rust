@@ -1,1 +1,1 @@
-worker: ./target/release/main
+worker: cargo run --package e01_basic_ping_bot --bin e01_basic_ping_bot
