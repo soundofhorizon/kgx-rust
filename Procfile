@@ -1,1 +1,1 @@
-bot: ./target/release/main
+bot: ./target/release/heroku_discord_bot
