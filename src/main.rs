@@ -465,8 +465,10 @@ async fn about(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-async fn sc(ctx: &Context, msg: &Message, value: &str) -> CommandResult{
-    msg.channel_id.say(&ctx.http, stack_check(value)).await?;
+async fn sc(ctx: &Context, msg: &Message, mut value: Args) -> CommandResult{
+    for arg in value{
+        msg.channel_id.say(&ctx.http, stack_check(arg)).await?;
+    }
 
     Ok(())
 }
