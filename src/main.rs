@@ -8,7 +8,7 @@
 //! git = "https://github.com/serenity-rs/serenity.git"
 //! features = ["framework", "standard_framework"]
 //! ```
-mod stack_calc;
+// mod stack_calc;
 
 use std::{
     collections::{HashMap, HashSet},
