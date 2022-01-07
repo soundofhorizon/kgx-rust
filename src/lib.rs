@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+// use std::collections::HashMap;
 use regex::Regex;
 
 pub fn stack_check(value: &str) -> &str{
