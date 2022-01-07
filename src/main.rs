@@ -204,6 +204,7 @@ async fn dispatch_error(ctx: &Context, msg: &Message, error: DispatchError) {
 // This requires some boilerplate though and the following additional import.
 use serenity::{futures::future::BoxFuture, FutureExt};
 use serenity::futures::future::ok;
+use kgx_rust::stack_check;
 
 fn _dispatch_error_no_macro<'fut>(
     ctx: &'fut mut Context,
@@ -465,7 +466,7 @@ async fn about(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 async fn sc(ctx: &Context, msg: &Message, value: &str) -> CommandResult{
-    msg.channel_id.say(&ctx.http, stack_calc::stack_check(value)).await?;
+    msg.channel_id.say(&ctx.http, stack_check(value)).await?;
 
     Ok(())
 }
