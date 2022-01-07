@@ -8,9 +8,9 @@ pub fn stack_check(value: &str) -> &str{
     // :param value: [a lc + b st + c…]の形の価格
     // :return: 価格をn個にしたもの(小数は丸め込む)。またはNone
 
-    let UNITS = Hashmap::from([
+    let units = Hashmap::from([
         ("lc", 3456),
-        ("st", 64)
+        ("st", 64),
     ]); //単位と対応する値
 
     // 最初にマッチした箇所全体を取り出す例
