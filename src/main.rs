@@ -465,7 +465,7 @@ async fn about(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 #[aliases("sc")]
-async fn stack_check(ctx: &Context, msg: &Message, mut value: Args) -> CommandResult{
+async fn stack_check(ctx: &Context, msg: &Message, value: Args) -> CommandResult{
     msg.channel_id.say(&ctx.http, stack_check_fn(value.message())).await?;
 
     Ok(())
