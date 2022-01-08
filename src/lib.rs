@@ -29,10 +29,10 @@ pub fn stack_check_fn(value: &str) -> f32 {
         let unit_match = Regex::new(r"(st|lc)?$").unwrap().captures(term);
         let unit = unit_match.unwrap().at(0).unwrap();
         let unit_convert = unit_definition.get(unit);
-        if unit_convert == None{
+        if let Some(unit_value) = unit_convert {
+            result += term.replace(unit, "").parse::<f32>().unwrap() * unit_value;
+        } else {
             result += term.replace(unit, "").parse::<f32>().unwrap()
-        }else{
-            result += term.replace(unit, "").parse::<f32>().unwrap() * unit_convert.unwrap();
         }
     }
 
