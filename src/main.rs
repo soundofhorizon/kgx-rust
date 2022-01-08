@@ -37,7 +37,7 @@ use serenity::{
     model::{
         channel::{Channel, Message},
         gateway::Ready,
-        id::UserId,
+        id::{UserId, ChannelId},
         permissions::Permissions,
     },
     utils::{content_safe, ContentSafeOptions},
@@ -63,8 +63,9 @@ struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
+        ChannelId(928684833595613226).say(&ctx.http, "起動しました").await.unwrap();
     }
 }
 
