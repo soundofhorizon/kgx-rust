@@ -16,7 +16,7 @@ pub fn stack_check_fn(value: &str) -> f32 {
     // 最初にマッチした箇所全体を取り出す例
     let re = Regex::new(r"\s*\d+((\.\d+)?(st|lc))?(\s*\+\s*\d+((\.\d+)?(st|lc))?)*\s*").unwrap();
     let value_lowercase = value.to_lowercase();
-    let caps = re.captures(&*value_lowercase).unwrap();
+    let caps = re.captures(&value_lowercase).unwrap();
     let re_caps = caps.at(0).unwrap();
 
     // 空白文字を削除
