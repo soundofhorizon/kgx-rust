@@ -1,1 +1,1 @@
-bot: ./target/release/kgx-rust
+bot: ./target/release/kgx_rust
