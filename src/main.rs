@@ -69,7 +69,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(about, am_i_admin, say, commands, ping, latency, some_long_command, upper_command)]
+#[commands(about, am_i_admin, say, commands, ping, latency, some_long_command, upper_command, stack_check)]
 struct General;
 
 #[group]
@@ -203,8 +203,7 @@ async fn dispatch_error(ctx: &Context, msg: &Message, error: DispatchError) {
 // You can construct a hook without the use of a macro, too.
 // This requires some boilerplate though and the following additional import.
 use serenity::{futures::future::BoxFuture, FutureExt};
-use serenity::futures::future::ok;
-use kgx_rust::stack_check;
+use kgx_rust::{stack_check_fn};
 
 fn _dispatch_error_no_macro<'fut>(
     ctx: &'fut mut Context,
@@ -227,7 +226,7 @@ fn _dispatch_error_no_macro<'fut>(
 #[tokio::main]
 async fn main() {
     // Configure the client with your Discord bot token in the environment.
-    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+    let token = env::var("TOKEN").expect("Expected a token in the environment");
 
     let http = Http::new_with_token(&token);
 
@@ -252,7 +251,7 @@ async fn main() {
         .configure(|c| c
             .with_whitespace(true)
             .on_mention(Some(bot_id))
-            .prefix("~")
+            .prefix("!")
             // In this case, if "," would be first, a message would never
             // be delimited at ", ", forcing you to trim your arguments if you
             // want to avoid whitespaces at the start of each.
@@ -465,10 +464,9 @@ async fn about(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-async fn sc(ctx: &Context, msg: &Message, mut value: Args) -> CommandResult{
-    for arg in value{
-        msg.channel_id.say(&ctx.http, stack_check(arg)).await?;
-    }
+#[aliases("sc")]
+async fn stack_check(ctx: &Context, msg: &Message, mut value: Args) -> CommandResult{
+    msg.channel_id.say(&ctx.http, stack_check_fn(value.message())).await?;
 
     Ok(())
 }
