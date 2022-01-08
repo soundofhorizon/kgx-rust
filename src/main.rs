@@ -1,5 +1,4 @@
 use std::env;
-use std::env::VarError;
 
 use serenity::{
     async_trait,
