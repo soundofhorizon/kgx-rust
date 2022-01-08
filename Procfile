@@ -1,1 +1,1 @@
-bot: ./target/release/kgx_rust
+bot: ./target/release/heroku_discord_bot
