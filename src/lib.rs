@@ -1,3 +1,7 @@
+pub mod utils;
+pub mod commands;
+
+
 use std::collections::HashMap;
 use regex::Regex;
 

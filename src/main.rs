@@ -224,6 +224,9 @@ fn _dispatch_error_no_macro<'fut>(
         .boxed()
 }
 
+use kgx_rust::commands::*;
+use kgx_rust::utils::*;
+
 #[tokio::main]
 async fn main() {
     // Configure the client with your Discord bot token in the environment.
@@ -306,7 +309,8 @@ async fn main() {
         .group(&GENERAL_GROUP)
         .group(&EMOJI_GROUP)
         .group(&MATH_GROUP)
-        .group(&OWNER_GROUP);
+        .group(&OWNER_GROUP)
+        .group(&ADMINONLY_GROUP);
 
     let mut client = Client::builder(&token)
         .event_handler(Handler)
@@ -325,6 +329,7 @@ async fn main() {
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
+        data.insert::<ConnectionMapKey>(Mutex::new(establish_connection()));
     }
 
     if let Err(why) = client.start().await {
