@@ -22,7 +22,7 @@ async fn execute_sql(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
     let conn = d.get::<ConnectionMapKey>().unwrap().lock().await;
 
     let result = diesel::sql_query(args.message()).execute(&*conn)?;
-    msg.channel_id.say(&ctx.http, format!("結果: {}", result)).await?;
+    msg.channel_id.say(&ctx.http, format!("結果行数: {}", result)).await?;
 
     Ok(())
 }
