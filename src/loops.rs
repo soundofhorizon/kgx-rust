@@ -32,7 +32,7 @@ pub async fn start_check_minutely(ctx: Arc<Context>) {
                     continue;
                 }
 
-                let content = if auction_info.last_tend > auction_info.start_price {
+                let content = if auction_info.last_tend >= auction_info.start_price {
                     format!("価格{}で落札されました", auction_info.last_tend)
                 } else {
                     "入札者はいませんでした".to_string()
