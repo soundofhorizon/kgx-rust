@@ -59,13 +59,17 @@ impl TypeMapKey for CommandCounter {
     type Value = HashMap<String, u64>;
 }
 
+
+use kgx_rust::loops::start_check_minutely;
+
 struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
-        ChannelId(928684833595613226).say(&ctx.http, "起動しました").await.unwrap();
+        let _ = ChannelId(928684833595613226).say(&ctx.http, "起動しました").await;
+        start_check_minutely(Arc::new(ctx)).await;
     }
 }
 
@@ -310,7 +314,8 @@ async fn main() {
         .group(&EMOJI_GROUP)
         .group(&MATH_GROUP)
         .group(&OWNER_GROUP)
-        .group(&ADMINONLY_GROUP);
+        .group(&ADMINONLY_GROUP)
+        .group(&AUCTIONDEAL_GROUP);
 
     let mut client = Client::builder(&token)
         .event_handler(Handler)

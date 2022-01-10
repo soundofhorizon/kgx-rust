@@ -1,5 +1,10 @@
 pub mod utils;
 pub mod commands;
+pub mod loops;
+#[macro_use]
+extern crate diesel;
+pub mod schema;
+pub mod models;
 
 
 use std::collections::HashMap;
