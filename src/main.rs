@@ -14,6 +14,8 @@ use std::{
     env,
     fmt::Write,
     sync::Arc,
+    num::{ParseIntError, IntErrorKind},
+    convert::Infallible,
 };
 
 use serenity::prelude::*;
@@ -25,6 +27,7 @@ use serenity::{
         help_commands,
         macros::{check, command, group, help, hook},
         Args,
+        ArgError,
         CommandGroup,
         CommandOptions,
         CommandResult,
@@ -169,10 +172,39 @@ async fn before(ctx: &Context, msg: &Message, command_name: &str) -> bool {
 }
 
 #[hook]
-async fn after(_ctx: &Context, _msg: &Message, command_name: &str, command_result: CommandResult) {
+async fn after(ctx: &Context, msg: &Message, command_name: &str, command_result: CommandResult) {
     match command_result {
         Ok(()) => println!("Processed command '{}'", command_name),
-        Err(why) => println!("Command '{}' returned error {:?}", command_name, why),
+        Err(why) => {
+            println!("Command '{}' returned error {:?}", command_name, why);
+            if let Some(arg_error) = why.downcast_ref::<ArgError::<ParseIntError>>() {
+                let error_message = match arg_error {
+                    ArgError::Eos => "引数が足りません",
+                    ArgError::Parse(parse_error) => {
+                        match parse_error.kind() {
+                            IntErrorKind::Empty => "文字列が空です",
+                            IntErrorKind::InvalidDigit => "無効な文字が含まれています",
+                            IntErrorKind::PosOverflow => "値が大きすぎます",
+                            IntErrorKind::NegOverflow => "値が小さすぎます",
+                            IntErrorKind::Zero => "0は使用できません",
+                            _ => unreachable!(),
+                        }
+                    },
+                    _ => unreachable!(),
+                };
+                msg.channel_id.say(&ctx.http, error_message).await.unwrap();
+
+            } else if let Some(arg_error) = why.downcast_ref::<ArgError::<Infallible>>() {
+                let error_message = match arg_error {
+                    ArgError::Eos => "引数が足りません",
+                    _ => unreachable!(),
+                };
+                msg.channel_id.say(&ctx.http, error_message).await.unwrap();
+
+            } else {
+                msg.channel_id.say(&ctx.http, format!("Unexpected error: {}", why)).await.unwrap();
+            }
+        },
     }
 }
 
