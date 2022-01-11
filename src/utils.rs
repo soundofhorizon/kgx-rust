@@ -5,17 +5,11 @@ use diesel::r2d2;
 use r2d2::{Pool, PooledConnection, ConnectionManager};
 use serenity::prelude::*;
 use serenity::async_trait;
-use tokio::sync::Mutex;
 
 
 type PgManager = ConnectionManager<PgConnection>;
 type PgConnectionPool = Pool<PgManager>;
 type PooledPgConnection = PooledConnection<PgManager>;
-
-pub struct ConnectionMapKey;
-impl TypeMapKey for ConnectionMapKey {
-    type Value = Mutex<PgConnection>;
-}
 
 struct PoolKey;
 impl TypeMapKey for PoolKey {

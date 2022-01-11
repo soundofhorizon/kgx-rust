@@ -17,16 +17,15 @@ pub async fn start_check_minutely(ctx: Arc<Context>) {
         loop {
             let now = Local::now().naive_local();
             
-            let d = ctx.data.read().await;
-            let conn = d.get::<ConnectionMapKey>().unwrap().lock().await;
+            let conn = ctx.get_connection().await;
 
-            let result = channel_auction.get_results::<ChannelAuction>(&*conn).unwrap();
+            let result = channel_auction.get_results::<ChannelAuction>(&conn).unwrap();
             for ChannelAuction { channel, auction: auction_id } in result.iter() {
                 let auction_id = match auction_id {
                     Some(auction_id) => auction_id,
                     None => continue,
                 };
-                let auction_info: AuctionInfo = demo_auction_info.filter(auction_id_col.eq(auction_id)).get_result(&*conn).unwrap();
+                let auction_info: AuctionInfo = demo_auction_info.filter(auction_id_col.eq(auction_id)).get_result(&conn).unwrap();
                 
                 if !(auction_info.end_time <= now) {
                     continue;
@@ -44,10 +43,8 @@ pub async fn start_check_minutely(ctx: Arc<Context>) {
                         })
                     }
                 ).await;
-                diesel::update(channel_auction.find(channel)).set(auction_col.eq(None::<i32>)).execute(&*conn).unwrap();
+                diesel::update(channel_auction.find(channel)).set(auction_col.eq(None::<i32>)).execute(&conn).unwrap();
             }
-            drop(conn);
-            drop(d);
 
             // 00秒まで待機
             let now = Local::now().naive_local();

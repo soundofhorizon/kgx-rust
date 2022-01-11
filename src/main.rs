@@ -364,9 +364,9 @@ async fn main() {
         .expect("Err creating client");
 
     {
+        insert_pool(&client).await;
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
-        data.insert::<ConnectionMapKey>(Mutex::new(establish_connection()));
     }
 
     if let Err(why) = client.start().await {

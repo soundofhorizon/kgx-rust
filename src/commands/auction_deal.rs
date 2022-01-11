@@ -19,12 +19,11 @@ use chrono::{Local, Duration};
 
 #[command]
 async fn start(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let d = ctx.data.read().await;
-    let conn = d.get::<ConnectionMapKey>().unwrap().lock().await;
+    let conn = ctx.get_connection().await;
 
     let channel_id = msg.channel_id.0 as i64;
 
-    let result = channel_auction.filter(channel_col.eq(channel_id)).get_results::<ChannelAuction>(&*conn)?;
+    let result = channel_auction.filter(channel_col.eq(channel_id)).get_results::<ChannelAuction>(&conn)?;
     if let [ChannelAuction { auction, .. }] = result[..] {
         if let Some(auction_id) = auction {
             msg.reply(&ctx.http, format!("既にオークションが開催されています (id:{})", auction_id)).await?;
@@ -63,8 +62,8 @@ async fn start(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         item, start_price, bin_price, end_time, last_tend: start_price-1
     };
     
-    let new_auction: AuctionInfo = diesel::insert_into(demo_auction_info).values(&new_auction).get_result(&*conn)?;
-    diesel::update(channel_auction.find(channel_id)).set(auction_col.eq(new_auction.id)).execute(&*conn)?;
+    let new_auction: AuctionInfo = diesel::insert_into(demo_auction_info).values(&new_auction).get_result(&conn)?;
+    diesel::update(channel_auction.find(channel_id)).set(auction_col.eq(new_auction.id)).execute(&conn)?;
     
     msg.channel_id.say(&ctx.http, format!("オークションを開始します\n{:?}", new_auction)).await?;
     
@@ -74,12 +73,11 @@ async fn start(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 
 #[command]
 async fn tend(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult{
-    let d = ctx.data.read().await;
-    let conn = d.get::<ConnectionMapKey>().unwrap().lock().await;
+    let conn = ctx.get_connection().await;
 
     let channel_id = msg.channel_id.0 as i64;
 
-    let result = channel_auction.filter(channel_col.eq(channel_id)).get_results::<ChannelAuction>(&*conn)?;
+    let result = channel_auction.filter(channel_col.eq(channel_id)).get_results::<ChannelAuction>(&conn)?;
     let auction_id = if let [ChannelAuction { auction, .. }] = result[..] {
         match auction {
             Some(auction_id) => auction_id,
@@ -94,7 +92,7 @@ async fn tend(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult{
     };
 
     let price: i32 = args.single()?;
-    let auction_info: AuctionInfo = demo_auction_info.filter(auction_id_col.eq(auction_id)).get_result(&*conn)?;
+    let auction_info: AuctionInfo = demo_auction_info.filter(auction_id_col.eq(auction_id)).get_result(&conn)?;
 
     if price <= auction_info.last_tend {
         let content = if auction_info.last_tend == auction_info.start_price-1 {
@@ -117,13 +115,13 @@ async fn tend(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult{
                     })
                 }
             ).await?;
-            diesel::update(channel_auction.find(channel_id)).set(auction_col.eq(None::<i32>)).execute(&*conn)?;
+            diesel::update(channel_auction.find(channel_id)).set(auction_col.eq(None::<i32>)).execute(&conn)?;
             return Ok(());
         }
     }
 
     msg.channel_id.say(&ctx.http, "入札しました").await?;
-    diesel::update(demo_auction_info.find(auction_id)).set(last_tend_col.eq(price)).execute(&*conn)?;
+    diesel::update(demo_auction_info.find(auction_id)).set(last_tend_col.eq(price)).execute(&conn)?;
 
     Ok(())
 }
