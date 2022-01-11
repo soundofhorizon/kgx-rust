@@ -18,10 +18,9 @@ use diesel::prelude::*;
 #[aliases("es", "sql")]
 async fn execute_sql(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
-    let d = ctx.data.read().await;
-    let conn = d.get::<ConnectionMapKey>().unwrap().lock().await;
+    let conn = ctx.get_connection().await;
 
-    let result = diesel::sql_query(args.message()).execute(&*conn)?;
+    let result = diesel::sql_query(args.message()).execute(&conn)?;
     msg.channel_id.say(&ctx.http, format!("結果行数: {}", result)).await?;
 
     Ok(())
@@ -30,16 +29,15 @@ async fn execute_sql(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
 
 #[command]
 async fn select(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let d = ctx.data.read().await;
-    let conn = d.get::<ConnectionMapKey>().unwrap().lock().await;
+    let conn = ctx.get_connection().await;
 
     let result = match &args.single::<String>()?[..] {
         "demo_auction_info" => {
-            let result: Vec<AuctionInfo> = demo_auction_info_table.load(&*conn)?;
+            let result: Vec<AuctionInfo> = demo_auction_info_table.load(&conn)?;
             result.iter().map(|row| format!("{:?}", row)).collect::<Vec<_>>().join("\n")
         },
         "channel_auction" => {
-            let result: Vec<ChannelAuction> = channel_auction_table.load(&*conn)?;
+            let result: Vec<ChannelAuction> = channel_auction_table.load(&conn)?;
             result.iter().map(|row| format!("{:?}", row)).collect::<Vec<_>>().join("\n")
         },
         _ => "設定されていないテーブルです".to_string(),
