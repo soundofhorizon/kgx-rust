@@ -1,5 +1,4 @@
 use std::env;
-use diesel::prelude::*;
 use diesel::pg::PgConnection;
 use diesel::r2d2;
 use r2d2::{Pool, PooledConnection, ConnectionManager};
@@ -15,12 +14,6 @@ struct PoolKey;
 impl TypeMapKey for PoolKey {
     type Value = PgConnectionPool;
 }
-
-pub fn establish_connection() -> PgConnection {
-    let url = env::var("DATABASE_URL").unwrap();
-    PgConnection::establish(&url).unwrap()
-}
-
 
 #[async_trait]
 pub trait GetConnection {
