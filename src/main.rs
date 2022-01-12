@@ -179,16 +179,17 @@ async fn after(ctx: &Context, msg: &Message, command_name: &str, command_result:
             println!("Command '{}' returned error {:?}", command_name, why);
             if let Some(arg_error) = why.downcast_ref::<ArgError::<ParseIntError>>() {
                 let error_message = match arg_error {
-                    ArgError::Eos => "引数が足りません",
+                    ArgError::Eos => "引数が足りません".into(),
                     ArgError::Parse(parse_error) => {
-                        match parse_error.kind() {
+                        let why = match parse_error.kind() {
                             IntErrorKind::Empty => "文字列が空です",
                             IntErrorKind::InvalidDigit => "無効な文字が含まれています",
                             IntErrorKind::PosOverflow => "値が大きすぎます",
                             IntErrorKind::NegOverflow => "値が小さすぎます",
                             IntErrorKind::Zero => "0は使用できません",
                             _ => unreachable!(),
-                        }
+                        };
+                        format!("整数に変換できませんでした({})", why)
                     },
                     _ => unreachable!(),
                 };
