@@ -150,3 +150,15 @@ pub mod auction_manager {
     }
 }
 pub use auction_manager::{AuctionManager, GetAuctionError, TendError};
+
+
+pub mod discord_helper {
+    use std::time::Duration;
+    use serenity::prelude::*;
+    use serenity::model::channel::Message;
+    use serenity::collector::message_collector::CollectReply;
+    
+    pub fn await_reply_by<'a>(ctx: &'a Context, msg: &Message) -> CollectReply<'a> {
+        msg.channel_id.await_reply(ctx).author_id(msg.author.id).timeout(Duration::from_secs(60*10))
+    }
+}

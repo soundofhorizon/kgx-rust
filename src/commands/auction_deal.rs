@@ -3,7 +3,6 @@ use serenity::model::prelude::*;
 use serenity::framework::standard::{
     macros::{group, command},
     Args,
-    ArgError,
     CommandResult,
 };
 use crate::schema::{
@@ -18,7 +17,7 @@ use chrono::{Local, Duration};
 
 
 #[command]
-async fn start(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+async fn start(ctx: &Context, msg: &Message) -> CommandResult {
     let conn = ctx.get_connection().await;
 
     let channel_id = msg.channel_id.0 as i64;
@@ -34,27 +33,82 @@ async fn start(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         return Ok(());
     }
     
-    let item: String = args.single()?; // 出品物
-    let start_price: i32 = args.single()?; // 開始価格
-    let bin_price: Option<i32> = match args.single() { // 即決価格 デフォルトでNone(即決なし)
-        Err(ArgError::Eos) => None,
-        other => Some(other?),
+    msg.channel_id.send_message(ctx, |m| {
+        m.embed(|e| {
+            e.description("出品するものを入力してください。").color(0xffaf60)
+        })
+    }).await?;
+    let item = if let Some(reply) = discord_helper::await_reply_by(ctx, msg).await {
+        reply.content.to_string()
+    } else {
+        msg.channel_id.say(ctx, "10分間操作がなかったためキャンセルしました\n--------ｷﾘﾄﾘ線--------").await?;
+        return Ok(());
     };
-    let minutes: i64 = match args.single() { // 終了時刻(何分後か) デフォルトで10
-        Err(ArgError::Eos) => 10,
-        other => other?,
+    
+    msg.channel_id.send_message(ctx, |m| {
+        m.embed(|e| {
+            e.description("開始価格を入力してください。").color(0xffaf60)
+        })
+    }).await?;
+    let start_price = if let Some(reply) = discord_helper::await_reply_by(ctx, msg).await {
+        if let Ok(start_price) = reply.content.parse() {
+            if start_price <= 0 {
+                msg.channel_id.say(ctx, "開始価格が0以下です。はじめからやり直してください\n--------ｷﾘﾄﾘ線--------").await?;
+                return Ok(());
+            }
+            start_price
+        } else {
+            msg.channel_id.say(ctx, "整数に変換できませんでした。はじめからやり直してください\n--------ｷﾘﾄﾘ線--------").await?;
+            return Ok(());
+        }
+    } else {
+        msg.channel_id.say(ctx, "10分間操作がなかったためキャンセルしました\n--------ｷﾘﾄﾘ線--------").await?;
+        return Ok(());
     };
 
-    if start_price <= 0 {
-        msg.channel_id.say(&ctx.http, "開始価格が0以下です").await?;
-        return Ok(());
-    }
-    if let Some(bin_price) = bin_price {
-        if bin_price < start_price {
-            msg.channel_id.say(&ctx.http, "即決価格が開始価格未満です").await?;
-            return Ok(())
+    msg.channel_id.send_message(ctx, |m| {
+        m.embed(|e| {
+            e.description("即決価格を入力してください。\nない場合は`なし`とお書きください。").color(0xffaf60)
+        })
+    }).await?;
+    let bin_price = if let Some(reply) = discord_helper::await_reply_by(ctx, msg).await {
+        if let Ok(bin_price) = reply.content.parse() {
+            if bin_price <= start_price {
+                msg.channel_id.say(ctx, "即決価格が開始価格以下です。はじめからやり直してください\n--------ｷﾘﾄﾘ線--------").await?;
+                return Ok(());
+            }
+            Some(bin_price)
+        } else if reply.content == "なし" {
+            None
+        } else {
+            msg.channel_id.say(ctx, "整数に変換できませんでした。はじめからやり直してください\n--------ｷﾘﾄﾘ線--------").await?;
+            return Ok(());
         }
-    }
+    } else {
+        msg.channel_id.say(ctx, "10分間操作がなかったためキャンセルしました\n--------ｷﾘﾄﾘ線--------").await?;
+        return Ok(());
+    };
+
+    msg.channel_id.send_message(ctx, |m| {
+        m.embed(|e| {
+            e.description("オークション期間[分]を入力してください。").color(0xffaf60)
+        })
+    }).await?;
+    let minutes = if let Some(reply) = discord_helper::await_reply_by(ctx, msg).await {
+        if let Ok(minutes) = reply.content.parse() {
+            if minutes <= 0 {
+                msg.channel_id.say(ctx, "0以下にはできません。はじめからやり直してください\n--------ｷﾘﾄﾘ線--------").await?;
+                return Ok(());
+            }
+            minutes
+        } else {
+            msg.channel_id.say(ctx, "整数に変換できませんでした。はじめからやり直してください\n--------ｷﾘﾄﾘ線--------").await?;
+            return Ok(());
+        }
+    } else {
+        msg.channel_id.say(ctx, "10分間操作がなかったためキャンセルしました\n--------ｷﾘﾄﾘ線--------").await?;
+        return Ok(());
+    };
     
     let end_time = Local::now().naive_local() + Duration::minutes(minutes);
     
@@ -100,7 +154,7 @@ async fn tend(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult{
         Ok(finished) => {
             if finished {
                 msg.channel_id.send_message(
-                    &ctx, |m| {
+                    ctx, |m| {
                         m.embed(|e| {
                             e.description(format!("即決価格以上の入札がされました\n落札者: {}\n落札額: {}", msg.author.name, price))
                         })
