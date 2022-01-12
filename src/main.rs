@@ -202,7 +202,7 @@ async fn after(ctx: &Context, msg: &Message, command_name: &str, command_result:
                 msg.channel_id.say(&ctx.http, error_message).await.unwrap();
 
             } else {
-                msg.channel_id.say(&ctx.http, format!("Unexpected error: {}", why)).await.unwrap();
+                msg.channel_id.say(&ctx.http, format!("Unexpected error: {:?}", why)).await.unwrap();
             }
         },
     }
