@@ -152,13 +152,134 @@ pub mod auction_manager {
 pub use auction_manager::{AuctionManager, GetAuctionError, TendError};
 
 
+pub mod formats {
+    use chrono::Duration;
+    use regex::Regex;
+    use std::collections::HashMap;
+
+    const DATETIME_PATTERN: &str = r"^(?P<year>\d{4})[-/](?P<month>\d{1,2})[-/](?P<day>\d{1,2})[-\stT](?P<hour>\d{1,2}):(?P<minute>\d{1,2})$";
+    const DURATION_PATTERN: &str = 
+        r"^(?ix)
+        ((?P<month>\d{1,4})(?P<m_unit>M))?
+        ((?P<week>\d{1,5})w)?
+        ((?P<day>\d{1,5})d)?
+        ((?P<hour>\d{1,5})h)?
+        ((?P<minute>\d{1,5})m)?
+        $";
+    const STACK_PATTERN: &str = r"^(?P<value>\d{1,8})(?P<unit>(st|lc)?)$";
+
+    pub fn datetime(text: &str) -> Option<(i32, u32, u32, u32, u32)> {
+        let pattern = Regex::new(DATETIME_PATTERN).unwrap();
+        let cap = match pattern.captures(text) {
+            Some(cap) => cap,
+            None => return None,
+        };
+        let year = cap.name("year").unwrap().as_str().parse().unwrap();
+        let month = cap.name("month").unwrap().as_str().parse().unwrap();
+        let day = cap.name("day").unwrap().as_str().parse().unwrap();
+        let hour = cap.name("hour").unwrap().as_str().parse().unwrap();
+        let minute = cap.name("minute").unwrap().as_str().parse().unwrap();
+        Some((year, month, day, hour, minute))
+    }
+
+    pub fn duration(text: &str) -> Option<(i32, Duration)> {
+        if text.is_empty() {
+            return None;
+        }
+        let pattern = Regex::new(DURATION_PATTERN).unwrap();
+        let cap = match pattern.captures(text) {
+            Some(cap) => cap,
+            None => return None,
+        };
+        if [cap.name("week"), cap.name("day"), cap.name("hour"), cap.name("minute")].iter()
+        .all(Option::is_none) && cap.name("month").is_some() && cap.name("m_unit").unwrap().as_str() == "m" {
+            return Some((0, Duration::minutes(cap.name("month").unwrap().as_str().parse().unwrap())));
+        }
+        let month = cap.name("month").map(|s| s.as_str().parse().unwrap()).unwrap_or(0);
+        let mut duration = Duration::zero();
+        if let Some(week) = cap.name("week") {
+            duration = duration + Duration::weeks(week.as_str().parse().unwrap());
+        }
+        if let Some(day) = cap.name("day") {
+            duration = duration + Duration::days(day.as_str().parse().unwrap());
+        }
+        if let Some(hour) = cap.name("hour") {
+            duration = duration + Duration::hours(hour.as_str().parse().unwrap());
+        }
+        if let Some(minute) = cap.name("minute") {
+            duration = duration + Duration::minutes(minute.as_str().parse().unwrap());
+        }
+
+        Some((month, duration))
+    }
+
+    pub fn stack_to_int(text: &str) -> Option<i32> {
+        let units = HashMap::from([
+            ("", 1),
+            ("st", 64),
+            ("lc", 3456),
+        ]);
+        let pattern = Regex::new(STACK_PATTERN).unwrap();
+        let mut res = 0;
+
+        for term in text.to_lowercase().split("+").map(str::trim) {
+            if let Some(cap) = pattern.captures(term) {
+                let value: i32 = cap.name("value").unwrap().as_str().parse().unwrap();
+                let unit = units.get(cap.name("unit").unwrap().as_str()).unwrap();
+                res += unit * value;
+            } else {
+                return None
+            }
+        }
+        Some(res)
+    }
+
+    pub fn last_day(year: i32, month: u32) -> u32 {
+        if month == 2 {
+            if year%400==0 || year%100!=0 && year%4==0 {
+                29
+            } else {
+                28
+            }
+        } else if [4, 6, 9, 11].contains(&month) {
+            30
+        } else {
+            31
+        }
+    }
+}
+
+
 pub mod discord_helper {
     use std::time::Duration;
     use serenity::prelude::*;
     use serenity::model::channel::Message;
-    use serenity::collector::message_collector::CollectReply;
+
     
-    pub fn await_reply_by<'a>(ctx: &'a Context, msg: &Message) -> CollectReply<'a> {
-        msg.channel_id.await_reply(ctx).author_id(msg.author.id).timeout(Duration::from_secs(60*10))
+    pub async fn await_right_reply<F, T>(ctx: &Context, msg: &Message, filter: F) -> Option<T> where
+        F: Fn(&str) -> Result<T, String>,
+    {
+        while let Some(reply) = msg.channel_id.await_reply(ctx).author_id(msg.author.id)
+            .timeout(Duration::from_secs(60*10)).await {
+            
+            if reply.content == "cancel" {
+                msg.channel_id.say(ctx, "キャンセルしました\n--------ｷﾘﾄﾘ線--------").await.unwrap();
+                return None;
+            }
+
+            match filter(&reply.content) {
+                Ok(result) => return Some(result),
+                Err(error_message) => {
+                    msg.channel_id.send_message(ctx, |m| {
+                        m.embed(|e| {
+                            e.description(error_message.to_string() + "\n入力しなおしてください。終了したい場合は**cancel**と入力してください。").color(0xffaf60)
+                        })
+                    }).await.unwrap();
+                }
+            }
+        }
+        msg.channel_id.say(ctx, "10分間操作がなかったためキャンセルしました\n--------ｷﾘﾄﾘ線--------").await.unwrap();
+        None
     }
 }
+pub use discord_helper::{await_right_reply};

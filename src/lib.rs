@@ -26,7 +26,7 @@ pub fn stack_check_fn(value: &str) -> f32 {
     let re = Regex::new(r"\s*\d+((\.\d+)?(st|lc))?(\s*\+\s*\d+((\.\d+)?(st|lc))?)*\s*").unwrap();
     let value_lowercase = value.to_lowercase();
     let caps = re.captures(&value_lowercase).unwrap();
-    let re_caps = caps.at(0).unwrap();
+    let re_caps = caps.get(0).unwrap().as_str();
 
     // 空白文字を削除
     let space_re = Regex::new(r"\s").unwrap();
@@ -36,7 +36,7 @@ pub fn stack_check_fn(value: &str) -> f32 {
     let mut result: f32 = 0.0;
     for term in remove_space_re_caps.split("+"){
         let unit_match = Regex::new(r"(st|lc)?$").unwrap().captures(term);
-        let unit = unit_match.unwrap().at(0).unwrap();
+        let unit = unit_match.unwrap().get(0).unwrap().as_str();
         let unit_convert = unit_definition.get(unit);
         if let Some(unit_value) = unit_convert {
             result += term.replace(unit, "").parse::<f32>().unwrap() * unit_value;
