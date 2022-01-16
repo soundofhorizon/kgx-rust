@@ -6,7 +6,7 @@ use serenity::framework::standard::{
     CommandResult,
 };
 use crate::schema::{
-    demo_auction_info::dsl::demo_auction_info,
+    auction_info::dsl::{auction_info, id as auction_id_col, embed_id},
     channel_auction::dsl::{channel_auction, channel as channel_col, auction as auction_col},
 };
 use crate::utils::*;
@@ -44,6 +44,19 @@ async fn start(ctx: &Context, msg: &Message) -> CommandResult {
     
     msg.channel_id.send_message(ctx, |m| {
         m.embed(|e| {
+            e.description("何によるオークションですか？単位を入力してください。(ex.GTギフト券, がちゃりんご, エメラルド etc)").color(0xffaf60)
+        })
+    }).await?;
+    let unit = unwrap_or_return!(discord_helper::await_right_reply(ctx, msg, |content| {
+        if content.contains("\n") {
+            Err("単位に改行を含めてはいけません".into())
+        } else {
+            Ok(content.to_string())
+        }
+    }).await);
+
+    msg.channel_id.send_message(ctx, |m| {
+        m.embed(|e| {
             e.description("出品するものを入力してください。").color(0xffaf60)
         })
     }).await?;
@@ -77,7 +90,10 @@ async fn start(ctx: &Context, msg: &Message) -> CommandResult {
 
     msg.channel_id.send_message(ctx, |m| {
         m.embed(|e| {
-            e.description("即決価格を入力してください。\nない場合は`なし`とお書きください。").color(0xffaf60)
+            e.description(
+                "即決価格を入力してください。\n
+                **※次のように入力してください。【〇LC+△ST+□】 or　【〇ST+△】 or 【△】 ex.1lc+1st+1 or 1st+1 or 32**\n
+                ない場合は`なし`とお書きください。").color(0xffaf60)
         })
     }).await?;
     let bin_price = unwrap_or_return!(discord_helper::await_right_reply(ctx, msg, |content| {
@@ -104,7 +120,7 @@ async fn start(ctx: &Context, msg: &Message) -> CommandResult {
             終了したい場合は**cancel**と入力してください", Local::now().naive_local().year())).color(0xffaf60)
         })
     }).await?;
-    let (end_time, _end_time_txt) = unwrap_or_return!(discord_helper::await_right_reply(ctx, msg, |content| {
+    let (end_time, end_time_txt) = unwrap_or_return!(discord_helper::await_right_reply(ctx, msg, |content| {
         let now = Local::now().naive_local();
 
         let time = if let Some((year, month, day, hour, minute)) = formats::datetime(content) {
@@ -156,15 +172,52 @@ async fn start(ctx: &Context, msg: &Message) -> CommandResult {
             Ok((time.0, format!("{:0>4}/{:0>2}/{:0>2} {:0>2}:{:0>2}", time.1, time.2, time.3, time.4, time.5)))
         }
     }).await);
+
+    msg.channel_id.send_message(ctx, |m| {
+        m.embed(|e| {
+            e.description("その他、即決特典などありましたらお書きください。\n長い場合、改行などをして**１回の送信**で書いてください。\n
+            何も無ければ「なし」で構いません。").color(0xffaf60)
+        })
+    }).await?;
+    let notice = unwrap_or_return!(discord_helper::await_right_reply(ctx, msg, |content| {
+        Ok(content.into())
+    }).await);
+
     
+    let channel_id = msg.channel_id.0 as i64;
     let new_auction = NewAuctionInfo {
-        item, start_price, bin_price, end_time, last_tend: start_price-1
+        channel_id, owner_id: msg.author.id.0 as i64, item, unit, start_price, bin_price, end_time, notice,
     };
-    
-    let new_auction: AuctionInfo = diesel::insert_into(demo_auction_info).values(&new_auction).get_result(&conn)?;
+    let member = msg.guild_id.unwrap().member(&ctx, msg.author.clone()).await?;
+    let embed_editter = new_auction.info_embed(formats::get_nick(&member).into(), end_time_txt.clone());
+
+    discord_helper::purge(&ctx, msg.channel_id, msg.id).await?;
+    msg.channel_id.send_message(&ctx, |m| {
+        m.embed(|e| {
+            e.title("これで始めます。よろしいですか？YES/NOで答えてください。(小文字でもOK。NOの場合初めからやり直してください。)");
+            embed_editter(e)
+        })
+    }).await?;
+    if !unwrap_or_return!(discord_helper::await_right_reply(&ctx, msg, |content| {
+        Ok(content.to_lowercase() == "yes")
+    }).await) {
+        msg.channel_id.say(&ctx, "初めからやり直してください。\n--------ｷﾘﾄﾘ線--------").await?;
+        discord_helper::purge(&ctx, msg.channel_id, msg.id).await?;
+        return Ok(());
+    }
+
+    discord_helper::purge(&ctx, msg.channel_id, msg.id).await?;
+    let new_auction: AuctionInfo = diesel::insert_into(auction_info).values(&new_auction).get_result(&conn)?;
+    let embed_message = msg.channel_id.send_message(&ctx, |m| {
+        m.content("オークションを開始します")
+         .embed(|e| {
+            e.title("オークション内容").field("ID", new_auction.id, false);
+            embed_editter(e)
+        })
+    }).await?;
+    diesel::update(auction_info).filter(auction_id_col.eq(new_auction.id)).set(embed_id.eq(Some(embed_message.id.0 as i64))).execute(&conn)?;
     diesel::update(channel_auction.find(channel_id)).set(auction_col.eq(new_auction.id)).execute(&conn)?;
     
-    msg.channel_id.say(&ctx.http, format!("オークションを開始します\n{:?}", new_auction)).await?;
     
     Ok(())
 }
@@ -214,6 +267,7 @@ async fn tend(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult{
                 TendError::LessThanStartPrice => format!("入札価格が開始価格({})より低いです", manager.start_price),
                 TendError::LastTendOrLess => format!("入札価格が現在の入札価格({})以下です", manager.tend.last().unwrap().price),
                 TendError::SameTender => "同一人物による入札は出来ません。".into(),
+                TendError::ByOwner => "出品者が入札は出来ません。".into(),
             };
             msg.channel_id.say(&ctx.http, content).await?;
         }

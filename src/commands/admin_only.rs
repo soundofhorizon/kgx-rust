@@ -7,7 +7,7 @@ use serenity::framework::standard::{
 };
 use crate::utils::*;
 use crate::schema::{
-    demo_auction_info::dsl::demo_auction_info as demo_auction_info_table,
+    auction_info::dsl::auction_info as auction_info_table,
     channel_auction::dsl::channel_auction as channel_auction_table,
 };
 use crate::models::*;
@@ -32,8 +32,8 @@ async fn select(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let conn = ctx.get_connection().await;
 
     let result = match &args.single::<String>()?[..] {
-        "demo_auction_info" => {
-            let result: Vec<AuctionInfo> = demo_auction_info_table.load(&conn)?;
+        "auction_info" => {
+            let result: Vec<AuctionInfo> = auction_info_table.load(&conn)?;
             result.iter().map(|row| format!("{:?}", row)).collect::<Vec<_>>().join("\n")
         },
         "channel_auction" => {

@@ -47,7 +47,7 @@ pub mod auction_manager {
     use crate::models::*;
     use crate::schema::{
         channel_auction::dsl::{channel_auction, channel as channel_col, auction as auction_col},
-        demo_auction_info::dsl::{demo_auction_info, id as auction_id_col, last_tend as last_tend_col},
+        auction_info::dsl::{auction_info as info_table, id as auction_id_col, tenders_id as tenders_id_col, tends_price as tends_price_col},
     };
     use crate::utils::PooledPgConnection;
 
@@ -56,26 +56,33 @@ pub mod auction_manager {
         pub price: i32,
     }
 
+    #[derive(Debug)]
     pub enum GetAuctionError {
         NotAuctionChannel,
         NotHeld,
         InvalidId,
     }
 
+    #[derive(Debug)]
     pub enum TendError {
         LessThanStartPrice,
         LastTendOrLess,
         SameTender,
+        ByOwner,
     }
     
     pub struct AuctionManager {
         pub channel_id: u64,
         pub id: i32,
+        pub owner_id: u64,
         pub item: String,
+        pub unit: String,
         pub tend: Vec<TendInfo>,
         pub end_time: NaiveDateTime,
         pub start_price: i32,
         pub bin_price: Option<i32>,
+        pub notice: String,
+        pub embed_id: u64,
     }
 
     impl AuctionManager {
@@ -93,20 +100,24 @@ pub mod auction_manager {
         }
 
         pub fn from_id(conn: &PooledPgConnection, auction_id: i32) -> QueryResult<Result<Self, GetAuctionError>> {
-            let auction_info = demo_auction_info.filter(auction_id_col.eq(auction_id)).get_result::<AuctionInfo>(conn).optional()?;
+            let auction_info = info_table.filter(auction_id_col.eq(auction_id)).get_result::<AuctionInfo>(conn).optional()?;
             if let Some(info) = auction_info {
                 let mut tend = vec![];
-                if info.last_tend >= info.start_price {
-                    tend.push(TendInfo { tender_id: 0, price: info.last_tend});
+                for (tender_id, price) in info.tenders_id.into_iter().zip(info.tends_price) {
+                    tend.push(TendInfo { tender_id: tender_id as u64, price })
                 }
                 Ok(Ok(Self {
                     channel_id: 0,
                     id: info.id,
+                    owner_id: info.owner_id as u64,
                     item: info.item,
                     tend,
                     end_time: info.end_time,
                     start_price: info.start_price,
                     bin_price: info.bin_price,
+                    embed_id: info.embed_id.unwrap() as u64,
+                    unit: info.unit,
+                    notice: info.notice,
                 }))
             } else {
                 Ok(Err(GetAuctionError::InvalidId))
@@ -114,6 +125,10 @@ pub mod auction_manager {
         }
 
         pub fn tend(&mut self, conn: &PooledPgConnection, tender_id: u64, tend_price: i32) -> Result<bool, TendError> {
+
+            if tender_id == self.owner_id {
+                return Err(TendError::ByOwner);
+            }
 
             let mut finish = false;
             if let Some(bin_price) = self.bin_price {
@@ -135,7 +150,14 @@ pub mod auction_manager {
             }
             let new_tend = TendInfo { tender_id, price: tend_price };
             self.tend.push(new_tend);
-            diesel::update(demo_auction_info.find(self.id)).set(last_tend_col.eq(tend_price)).execute(conn).unwrap();
+            let mut tenders_id = vec![];
+            let mut tends_price = vec![];
+            for TendInfo { tender_id, price } in self.tend.iter() {
+                tenders_id.push(*tender_id as i64);
+                tends_price.push(*price);
+            }
+            diesel::update(info_table.find(self.id)).set((tenders_id_col.eq(tenders_id), tends_price_col.eq(tends_price)))
+                .execute(conn).unwrap();
             
             if finish {
                 self.finish(conn);
@@ -156,6 +178,7 @@ pub mod formats {
     use chrono::Duration;
     use regex::Regex;
     use std::collections::HashMap;
+    use serenity::model::guild::Member;
 
     const DATETIME_PATTERN: &str = r"^(?P<year>\d{4})[-/](?P<month>\d{1,2})[-/](?P<day>\d{1,2})[-\stT](?P<hour>\d{1,2}):(?P<minute>\d{1,2})$";
     const DURATION_PATTERN: &str = 
@@ -234,6 +257,26 @@ pub mod formats {
         Some(res)
     }
 
+    pub fn int_to_stack(mut value: i32) -> String {
+        let lc = value / 3456;
+        value %= 3456;
+        let st = value / 64;
+        value %= 64;
+        
+        let mut res = vec![];
+        if lc > 0 {
+            res.push(format!("{}LC", lc))
+        }
+        if st > 0 {
+            res.push(format!("{}st", st))
+        }
+        if value > 0 {
+            res.push(format!("{}個", value))
+        }
+
+        res.join("+")
+    }
+
     pub fn last_day(year: i32, month: u32) -> u32 {
         if month == 2 {
             if year%400==0 || year%100!=0 && year%4==0 {
@@ -247,13 +290,18 @@ pub mod formats {
             31
         }
     }
+
+    pub fn get_nick(member: &Member) -> &str {
+        member.nick.as_ref().unwrap_or(&member.user.name)
+    }
 }
 
 
 pub mod discord_helper {
     use std::time::Duration;
     use serenity::prelude::*;
-    use serenity::model::channel::Message;
+    use serenity::Result as SrnResult;
+    use serenity::model::{channel::Message, id::{MessageId, ChannelId}};
 
     
     pub async fn await_right_reply<F, T>(ctx: &Context, msg: &Message, filter: F) -> Option<T> where
@@ -280,6 +328,14 @@ pub mod discord_helper {
         }
         msg.channel_id.say(ctx, "10分間操作がなかったためキャンセルしました\n--------ｷﾘﾄﾘ線--------").await.unwrap();
         None
+    }
+
+    pub async fn purge(ctx: &Context, channel_id: ChannelId, after: MessageId) -> SrnResult<()> {
+        let messages = channel_id.messages(ctx, |g| {
+            g.after(after)
+        }).await?;
+        channel_id.delete_messages(&ctx, messages).await?;
+        Ok(())
     }
 }
 pub use discord_helper::{await_right_reply};
