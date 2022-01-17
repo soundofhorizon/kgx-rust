@@ -188,8 +188,7 @@ async fn start(ctx: &Context, msg: &Message) -> CommandResult {
     let new_auction = NewAuctionInfo {
         channel_id, owner_id: msg.author.id.0 as i64, item, unit, start_price, bin_price, end_time, notice,
     };
-    let member = msg.guild_id.unwrap().member(&ctx, msg.author.clone()).await?;
-    let embed_editter = new_auction.info_embed(formats::get_nick(&member).into(), end_time_txt.clone());
+    let embed_editter = new_auction.info_embed(formats::display_name(&ctx, &msg.author, msg.guild(&ctx).await).await, end_time_txt.clone());
 
     discord_helper::purge(&ctx, msg.channel_id, msg.id).await?;
     msg.channel_id.send_message(&ctx, |m| {
@@ -215,6 +214,7 @@ async fn start(ctx: &Context, msg: &Message) -> CommandResult {
             embed_editter(e)
         })
     }).await?;
+    embed_message.pin(&ctx).await?;
     diesel::update(auction_info).filter(auction_id_col.eq(new_auction.id)).set(embed_id.eq(Some(embed_message.id.0 as i64))).execute(&conn)?;
     diesel::update(channel_auction.find(channel_id)).set(auction_col.eq(new_auction.id)).execute(&conn)?;
     
@@ -246,6 +246,8 @@ async fn tend(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult{
     };
 
     let price: i32 = args.single()?;
+    let tender_name = formats::display_name(&ctx, &msg.author, msg.guild(&ctx).await).await;
+    let format_price = format!("{}{}", manager.unit, formats::stack_with_raw(price));
 
     let tend_result = manager.tend(&conn, msg.author.id.0, price);
     match tend_result {
@@ -254,12 +256,20 @@ async fn tend(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult{
                 msg.channel_id.send_message(
                     ctx, |m| {
                         m.embed(|e| {
-                            e.description(format!("即決価格以上の入札がされました\n落札者: {}\n落札額: {}", msg.author.name, price))
+                            e.description(format!("即決価格以上の入札がされました\n落札者: **{}**\n落札額: **{}**", tender_name, format_price))
+                             .color(0x4259fb)
                         })
                     }
                 ).await?;
+                msg.channel_id.say(&ctx, "--------ｷﾘﾄﾘ線--------").await?;
+                manager.finish(&ctx).await;
             } else {
-                msg.channel_id.say(&ctx.http, "入札しました").await?;
+                msg.channel_id.send_message(&ctx.http, |m| {
+                    m.embed(|e| {
+                        e.description(format!("入札者: **{}**,\n入札額: **{}**", tender_name, format_price))
+                         .color(0x4259fb)
+                    })
+                }).await?;
             }
         },
         Err(error) => {

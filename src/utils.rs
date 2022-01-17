@@ -42,8 +42,10 @@ pub async fn insert_pool(client: &Client) {
 
 pub mod auction_manager {
     use chrono::NaiveDateTime;
+    use serenity::prelude::*;
     use serenity::model::id::ChannelId;
     use diesel::prelude::*;
+    use super::GetConnection;
     use crate::models::*;
     use crate::schema::{
         channel_auction::dsl::{channel_auction, channel as channel_col, auction as auction_col},
@@ -107,7 +109,7 @@ pub mod auction_manager {
                     tend.push(TendInfo { tender_id: tender_id as u64, price })
                 }
                 Ok(Ok(Self {
-                    channel_id: 0,
+                    channel_id: info.channel_id as u64,
                     id: info.id,
                     owner_id: info.owner_id as u64,
                     item: info.item,
@@ -159,15 +161,13 @@ pub mod auction_manager {
             diesel::update(info_table.find(self.id)).set((tenders_id_col.eq(tenders_id), tends_price_col.eq(tends_price)))
                 .execute(conn).unwrap();
             
-            if finish {
-                self.finish(conn);
-            }
-            
             Ok(finish)
         }
         
-        pub fn finish(&self, conn: &PooledPgConnection) {
-            diesel::update(channel_auction).filter(auction_col.eq(Some(self.id))).set(auction_col.eq(None::<i32>)).execute(conn).unwrap();
+        pub async fn finish(&self, ctx: &Context) {
+            let conn = ctx.get_connection().await;
+            diesel::update(channel_auction).filter(auction_col.eq(Some(self.id))).set(auction_col.eq(None::<i32>)).execute(&conn).unwrap();
+            ChannelId(self.channel_id).unpin(ctx, self.embed_id).await.unwrap();
         }
     }
 }
@@ -178,7 +178,8 @@ pub mod formats {
     use chrono::Duration;
     use regex::Regex;
     use std::collections::HashMap;
-    use serenity::model::guild::Member;
+    use serenity::prelude::*;
+    use serenity::model::{guild::{Member, Guild}, user::User};
 
     const DATETIME_PATTERN: &str = r"^(?P<year>\d{4})[-/](?P<month>\d{1,2})[-/](?P<day>\d{1,2})[-\stT](?P<hour>\d{1,2}):(?P<minute>\d{1,2})$";
     const DURATION_PATTERN: &str = 
@@ -277,6 +278,14 @@ pub mod formats {
         res.join("+")
     }
 
+    pub fn stack_with_raw(value: i32) -> String {
+        let mut res = int_to_stack(value);
+        if value >= 64 {
+            res.push_str(&format!(" ({})", value));
+        }
+        res
+    }
+
     pub fn last_day(year: i32, month: u32) -> u32 {
         if month == 2 {
             if year%400==0 || year%100!=0 && year%4==0 {
@@ -293,6 +302,18 @@ pub mod formats {
 
     pub fn get_nick(member: &Member) -> &str {
         member.nick.as_ref().unwrap_or(&member.user.name)
+    }
+
+    pub async fn display_name(ctx: &Context, user: &User, guild: Option<Guild>) -> String {
+        let user_name = user.name.clone();
+        if let Some(guild_id) = guild {
+            match guild_id.member(ctx, user).await {
+                Ok(member) => member.nick.unwrap_or(user_name),
+                Err(_) => "退出済みのユーザー".into(),
+            }
+        } else {
+            user_name
+        }
     }
 }
 
