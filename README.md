@@ -1,3 +1,5 @@
+このプロジェクトは4/11をもって凍結されます。
+archivedとして残す為、必要ならばforkして開発を進めてください。
 
 herokuでRust・serenityのdiscordbotを動かせることを確認するためのプロジェクトです<br>
 herokuのBuildpacksにhttps://github.com/emk/heroku-buildpack-rust.git を追加してあります<br>
